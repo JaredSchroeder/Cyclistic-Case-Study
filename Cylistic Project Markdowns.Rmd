@@ -1,0 +1,234 @@
+---
+title: "Cyclistic Capstone Project"
+author: "Jared"
+date: "2023-03-20"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Scenario
+
+I am a junior data analyst working in the marketing analysis team at Cyclistic, a fictional bike-share company based in Chicago. From the insights I gather, I will design a new marketing strategy to convert casual riders to members. But first, Cyclistic executives must approve my recommendations, so they must be backed up with compelling data insights and professional data visualizations.
+
+-   My Stakeholders are:
+    1.  Lily Moreno: The Director of Marketing
+    2.  The Cyclistic Executive Team
+
+### The Ask Phase
+
+1.  How do casual riders and annual members use Cylistic differently?
+2.  Why would casual riders buy Clyclistic annual memberships?
+3.  How can Cyclistic use digital media to influence casual riders to become members?
+
+### The Prepare Phase
+
+Data Source: 6 Months of data from July 1st, 2022 through December 31st, 2022. Located in .csv files I downloaded from Google's Data Analytics course on Coursera.
+
+### Process phase
+
+I chose to use R Studio to process, clean, and analyze my data because it contains \~3,000,000 rows of data, which is too much for speadsheet programs to use.
+
+### Analyze phase
+
+#### I ran this query in R Studio:
+
+
+#### Setting libraries
+
+```{r}
+library(lubridate) 
+library(tidyverse) 
+library(janitor) 
+library(dplyr) 
+library(tidyr) 
+library(readr) 
+library(ggplot2)
+```
+
+#### Reading the csv files
+
+```{r}
+jul_22 <- read.csv("C:/Users/jared/Desktop/2022 Bikeshare Dataset/202207-divvy-tripdata/202207-divvy-tripdata.csv") 
+aug_22 <- read.csv("C:/Users/jared/Desktop/2022 Bikeshare Dataset/202208-divvy-tripdata/202208-divvy-tripdata.csv") 
+sep_22 <- read.csv("C:/Users/jared/Desktop/2022 Bikeshare Dataset/202209-divvy-tripdata/202209-divvy-publictripdata.csv") 
+oct_22 <- read.csv("C:/Users/jared/Desktop/2022 Bikeshare Dataset/202210-divvy-tripdata/202210-divvy-tripdata.csv") 
+nov_22 <- read.csv("C:/Users/jared/Desktop/2022 Bikeshare Dataset/202211-divvy-tripdata/202211-divvy-tripdata.csv") 
+dec_22 <- read.csv("C:/Users/jared/Desktop/2022 Bikeshare Dataset/202212-divvy-tripdata/202212-divvy-tripdata.csv")
+```
+
+#### Combining the csv files into one dataframe
+
+```{r}
+combined_df <- rbind(jul_22, aug_22, sep_22, oct_22, nov_22, dec_22)
+```
+
+#### Cleaning the data
+
+```{r}
+data <- clean_names(combined_df)
+data2 <- remove_empty(data, which = c("rows","cols"), quiet = FALSE)
+data3 <- distinct(data2) 
+data4 <- na.omit(data3)
+data5 <- data4 %>% separate(started_at, into = c('start_date', 'start_time'), sep = ' ')
+data6 <- data5 %>% separate(ended_at, into = c('end_date', 'end_time'), sep = ' ')
+data7 <- data6 %>% mutate(start_time = as.POSIXct(start_time, format = "%H:%M:%S"), end_time = as.POSIXct(end_time, format = "%H:%M:%S"))
+data8 <- data7 %>% mutate(duration = end_time - start_time)
+data9 <- data8 %>% separate(start_time, into = c('del', 'start_time'), sep = ' ')
+data10 <- data9 %>% separate(end_time, into = c('del2', 'end_time'), sep = ' ')
+data11 <- data10 %>% select(-del)
+data12 <- data11 %>% select(-del2)
+data13 <- rename(data12, trip_duration = duration)
+
+head(data13)
+```
+
+#### Analyzing the data
+
+```{r}
+data18 <- data13[!(data13$trip_duration <= 10),]
+
+data19 <- distinct(data18)
+```
+
+```{r}
+data19$date <- as.Date(data19$start_date) 
+data19$month <- format(as.Date(data19$date), "%m")
+
+trip_duration_mean <- mean(data18$trip_duration)
+```
+
+#### Filtering by member/casual
+
+```{r}
+mem_data <- filter(data19, member_casual == "member")
+cas_data <- filter(data19, member_casual == "casual")
+```
+
+```{r}
+mean(mem_data$trip_duration)
+mean(cas_data$trip_duration)
+```
+
+#### Sorting
+
+```{r}
+geo_mem_df <- select(mem_data, "start_station_name", "end_station_name", "start_lat", "start_lng", "end_lat", "end_lng") 
+geo_cas_df <- select(cas_data, "start_station_name", "end_station_name", "start_lat", "start_lng", "end_lat", "end_lng")
+```
+
+```{r}
+mem_cas_only <- select(data19, "member_casual") 
+mem_cas_only2 <- na.omit(mem_cas_only)
+```
+
+```{r}
+data20 <- na.omit(data19)
+```
+
+#### Graphing
+
+```{r}
+mem_cas_barchart <- ggplot(data=mem_cas_only2, aes(x=member_casual)) + geom_bar(stat = "count", aes(fill=member_casual))
+mem_cas_barchart
+
+ggsave("mem_cas_barchart.png")
+```
+
+```{r}
+dftrip <- data.frame(Member_casual=c("Member", "Casual"), Minutes=c(12.13, 19.73) )
+
+trip_duration_barchart <- ggplot(data=dftrip, aes(x=Member_casual, y=Minutes)) + geom_bar(stat = "identity", aes(fill=Member_casual))
+trip_duration_barchart 
+
+ggsave("trip_duration_barchart.png")
+```
+
+```{r}
+data20$month <- format(as.Date(data19$date), "%m")
+data20$month <- as.numeric(data19$month)
+```
+
+```{r}
+data20%>% group_by(month, member_casual) %>% summarise(number_of_rides = n()) %>% ggplot() + geom_bar(position="dodge", stat = "identity", aes(x=month, y=number_of_rides, fill=member_casual)) + labs(title = "Number of Rides", subtitle = "Per Month") + xlab("Month") + ylab("Number of Rides")
+
+ggsave("rides_per_month.png")
+```
+
+```{r}
+data20$day_of_week <- format(as.Date(data19$date), "%u")
+
+data20%>% group_by(day_of_week, member_casual) %>% summarise(number_of_rides = n()) %>% ggplot() + geom_bar(position="dodge", stat = "identity", aes(x=day_of_week, y=number_of_rides, fill=member_casual)) + labs(title = "Number of Rides", subtitle = "Every day of the Week") + xlab("Day of Week") + ylab("Number of Rides")
+
+ggsave("rides_per_day.png")
+```
+
+## Findings
+
+Let's answer the first question of the Ask Phase: "How do casual riders and annual members use Cylistic differently?"
+
+First, we should look at how many rides there were in this dataset:
+
+```{r echo=FALSE, out.width="100%"}
+knitr::include_graphics("C:/Users/jared/Desktop/Final Project/mem_cas_barchart.png")
+```
+
+There were more total rides by members than casuals in the past 6 months .
+
+Now let's take a look at the average trip duration:
+
+```{r echo=FALSE, out.width="100%"}
+knitr::include_graphics("C:/Users/jared/Desktop/Final Project/trip_duration_barchart.png")
+```
+
+As you can see in this bar graph, casual riders on average take more time on their rides than members.
+
+Next, We'll look at at the number if rides by day of the week:
+
+```{r echo=FALSE, out.width="100%"}
+knitr::include_graphics("C:/Users/jared/Desktop/Final Project/rides_per_day_new.png")
+```
+
+What we can see here is casual riders use Cyclistic more often on the weekends while members actually peak in the middle of the week and take a slight dip on the weekends.
+
+Now let's see what the monthly data says:
+
+```{r echo=FALSE, out.width="100%"}
+knitr::include_graphics("C:/Users/jared/Desktop/Final Project/rides_per_month_new.png")
+```
+
+Looks like the warmer the month, the more total rides we have. The fall off here is more extreme for casuals than annual members.
+
+Finally, we should look at some geographical data:
+
+#### Casual
+
+```{r echo=FALSE, out.width="100%"}
+knitr::include_graphics("C:/Users/jared/Desktop/Final Project/casual_geo_chart.png")
+```
+
+#### Member
+
+```{r echo=FALSE, out.width="100%"}
+knitr::include_graphics("C:/Users/jared/Desktop/Final Project/member_geo_chart.png")
+```
+
+What I notice here is that casual riders like to ride along the coast of Lake Michigan, where there are parks and sight seeing locations. Members are a little more spread out and in the middle of the city where there are more office buildings and businesses.
+
+### Summary
+
+Casual riders take longer trips, ride primarily on weekends and warmer months, and like to ride along the coast of Lake Michigan. Annual members take short trips, ride mainly on weekdays and warmer months, and their rides are spread out more evenly among the city.
+
+### Answering our three questions
+
+So, to answer our first question: "How to casual riders and annual members use Cyclistic differently?"
+
+I can conclude that casual riders use Cylistic for recreation on their own free time, while annual members use Cyclistic for more vocational reasons.
+
+As a result of this, I think adding a seasonal or monthly subscription would convert a lot of casual riders into members, Which brings us to our second question: "Why would casual riders buy Clyclistic annual memberships?". I believe casual Cyclistic riders would purchase a seasonal or monthly subscription because they mainly ride in warmer months and on weekends for their own personal enjoyment.
+
+Now we have to answer our third question: "How can Cyclistic use digital media to influence casual riders to become members?". I believe Cylistic can use localized advertisements on social media to promote the new seasonal/monthly subscription. This will get casual riders and new customers excited about riding Cyclistic.
